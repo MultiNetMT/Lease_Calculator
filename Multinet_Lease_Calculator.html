@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multinet — Lease Calculator</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:      #1A3C6E;
+  --blue:      #2E75B6;
+  --blue-lt:   #D5E8F0;
+  --blue-pale: #EBF3FB;
+  --green:     #166534;
+  --green-lt:  #F0FAF4;
+  --green-mid: #16a34a;
+  --amber:     #92400e;
+  --amber-lt:  #FFFBEB;
+  --red:       #991b1b;
+  --red-lt:    #FEF2F2;
+  --gray:      #F0F4F8;
+  --gray-mid:  #6B7A99;
+  --gray-bdr:  #DDE3EC;
+  --text:      #1a1a2e;
+  --text-mid:  #4A5568;
+  --white:     #ffffff;
+  --shadow:    0 4px 24px rgba(26,60,110,0.10);
+  --radius:    10px;
+}
+html { font-size: 14px; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #e8eef7;
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+}
+input[type=range] {
+  width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
+  background: var(--gray-bdr); border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--blue); cursor: pointer;
+  box-shadow: 0 1px 4px rgba(46,117,182,0.4);
+}
+input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--blue); }
+button { cursor: pointer; font-family: inherit; }
+table { border-collapse: collapse; width: 100%; }
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+.app { max-width: 1080px; margin: 0 auto; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.header {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 20px 28px;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: var(--shadow);
+}
+.header-left h1 { font-size: 20px; font-weight: 700; color: var(--white); letter-spacing: .02em; }
+.header-left p  { font-size: 11px; color: rgba(255,255,255,.7); margin-top: 3px; }
+.header-right   { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.badge { background: rgba(255,255,255,.15); border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 600; color: var(--white); letter-spacing: .04em; }
+.qty-badge { background: rgba(255,255,255,.25); border-radius: 20px; padding: 4px 16px; font-size: 14px; font-weight: 700; color: var(--white); }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.tabs { display: flex; background: var(--gray); border-bottom: 1px solid var(--gray-bdr); }
+.tab {
+  flex: 1; padding: 11px 4px; text-align: center; font-size: 12px; font-weight: 500;
+  color: var(--gray-mid); cursor: pointer; border-bottom: 3px solid transparent;
+  transition: all .15s; user-select: none;
+}
+.tab.active { color: var(--navy); border-bottom-color: var(--blue); background: var(--white); }
+.tab:hover:not(.active) { color: var(--blue); background: #e0eaf5; }
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+.body { background: var(--white); border-radius: 0 0 var(--radius) var(--radius); box-shadow: var(--shadow); }
+.panel { display: none; padding: 22px; }
+.panel.active { display: block; }
+
+/* ── Qty bar ──────────────────────────────────────────────────────────────── */
+.qty-bar {
+  background: linear-gradient(135deg, #0f2547, var(--navy));
+  border-radius: 10px; padding: 14px 20px;
+  display: flex; align-items: center; gap: 18px; margin-bottom: 18px;
+}
+.qty-bar label { font-size: 13px; color: rgba(255,255,255,.8); white-space: nowrap; }
+.qty-display { background: rgba(255,255,255,.2); border-radius: 8px; padding: 6px 18px; text-align: center; min-width: 76px; }
+.qty-num { font-size: 24px; font-weight: 700; color: var(--white); line-height: 1; }
+.qty-lbl { font-size: 10px; color: rgba(255,255,255,.65); text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── Summary cards ────────────────────────────────────────────────────────── */
+.summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
+.sc { background: var(--gray); border-radius: 8px; padding: 12px 14px; }
+.sc.hl { background: linear-gradient(135deg, var(--navy), var(--blue)); }
+.sc.gr { background: linear-gradient(135deg, var(--green), var(--green-mid)); }
+.sc-label { font-size: 10px; color: var(--gray-mid); margin-bottom: 4px; }
+.sc.hl .sc-label, .sc.gr .sc-label { color: rgba(255,255,255,.75); }
+.sc-value { font-size: 18px; font-weight: 600; color: var(--navy); }
+.sc.hl .sc-value, .sc.gr .sc-value { color: var(--white); font-size: 20px; }
+.sc-sub { font-size: 10px; color: #99a3b8; margin-top: 2px; }
+.sc.hl .sc-sub, .sc.gr .sc-sub { color: rgba(255,255,255,.6); }
+
+/* ── Two-col grid ─────────────────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--gray); border: 1px solid var(--gray-bdr); border-radius: var(--radius); padding: 16px; }
+.box-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--gray-mid); margin-bottom: 14px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-bdr);
+}
+
+/* ── Slider rows ──────────────────────────────────────────────────────────── */
+.sr { margin-bottom: 12px; }
+.sr:last-child { margin-bottom: 0; }
+.sr-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.sr-top label { font-size: 12px; color: var(--text-mid); }
+.sr-top span  { font-size: 12px; font-weight: 600; color: var(--navy); min-width: 60px; text-align: right; }
+
+/* ── Toggle group ─────────────────────────────────────────────────────────── */
+.tg { display: flex; gap: 6px; margin-bottom: 10px; }
+.tog {
+  flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 500;
+  border: 1.5px solid var(--gray-bdr); border-radius: 6px;
+  background: var(--white); color: var(--gray-mid); cursor: pointer;
+  transition: all .15s; text-align: center;
+}
+.tog.active { border-color: var(--blue); background: var(--blue-pale); color: var(--navy); }
+
+/* ── Check row ────────────────────────────────────────────────────────────── */
+.cr { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--gray-bdr); margin-top: 8px; }
+.cr label { font-size: 12px; color: var(--text-mid); cursor: pointer; }
+
+/* ── Breakdown table ──────────────────────────────────────────────────────── */
+.breakdown { background: var(--gray); border: 1px solid var(--gray-bdr); border-radius: var(--radius); overflow: hidden; margin-top: 14px; }
+.bd-title { padding: 9px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-mid); background: #edf2f7; border-bottom: 1px solid var(--gray-bdr); display: flex; justify-content: space-between; align-items: center; }
+.breakdown table td { padding: 7px 14px; font-size: 12px; border-bottom: 1px solid #edf2f7; }
+.breakdown table td:nth-child(2), .breakdown table td:nth-child(3) { text-align: right; }
+.breakdown table td:nth-child(2) { color: var(--gray-mid); }
+.breakdown table tr.gh td { background: #edf2f7; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-mid); padding: 5px 14px; }
+.breakdown table tr.tr-total td { background: var(--navy); color: var(--white); font-weight: 600; font-size: 13px; }
+.breakdown table tr.tr-net td { background: var(--blue-pale); color: var(--navy); font-weight: 500; }
+.breakdown table tr.tr-profit td { background: var(--green-lt); color: var(--green); font-weight: 600; }
+.breakdown table tr:last-child td { border-bottom: none; }
+
+/* ── Footer bar ───────────────────────────────────────────────────────────── */
+.foot-bar { margin-top: 16px; background: var(--gray); border-radius: var(--radius); padding: 14px 20px; display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+.fb-item .fb-label { font-size: 10px; color: var(--gray-mid); margin-bottom: 3px; }
+.fb-item .fb-val   { font-size: 15px; font-weight: 600; color: var(--navy); }
+.fb-item .fb-val.green { color: var(--green); }
+
+/* ── Pool tab ─────────────────────────────────────────────────────────────── */
+.pool-calc { background: var(--gray); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
+.pool-calc table td { padding: 5px 0; font-size: 13px; color: var(--text-mid); }
+.pool-calc table td:last-child { text-align: right; font-weight: 500; color: var(--navy); }
+.pool-calc table tr.pc-total td { font-weight: 700; color: var(--navy); border-top: 1px solid var(--gray-bdr); padding-top: 8px; font-size: 14px; }
+.verdict { border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+.verdict.good { background: var(--green-lt); border: 1px solid #86efac; }
+.verdict.ok   { background: var(--amber-lt); border: 1px solid #fcd34d; }
+.verdict.bad  { background: var(--red-lt);   border: 1px solid #fca5a5; }
+.verdict .vt  { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.verdict.good .vt, .verdict.good .vx { color: var(--green); }
+.verdict.ok   .vt, .verdict.ok   .vx { color: var(--amber); }
+.verdict.bad  .vt, .verdict.bad  .vx { color: var(--red); }
+.verdict .vx  { font-size: 12px; line-height: 1.5; }
+.ref-table { margin-top: 12px; background: var(--gray); border-radius: 8px; padding: 12px 14px; }
+.ref-table table td { padding: 4px 6px; font-size: 12px; }
+.ref-table table td:not(:first-child) { text-align: right; }
+
+/* ── Amortisation ─────────────────────────────────────────────────────────── */
+.amort-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--gray-bdr); max-height: 480px; overflow-y: auto; }
+.amort-wrap table thead th { background: var(--navy); color: var(--white); padding: 8px 8px; font-size: 10px; font-weight: 600; text-align: right; white-space: nowrap; position: sticky; top: 0; }
+.amort-wrap table thead th:first-child { text-align: left; }
+.amort-wrap table tbody tr:nth-child(even) { background: var(--gray); }
+.amort-wrap table tbody td { padding: 5px 8px; border-bottom: 1px solid #edf2f7; text-align: right; font-size: 11px; color: var(--text-mid); }
+.amort-wrap table tbody td:first-child { text-align: left; font-weight: 600; color: var(--navy); }
+.amort-wrap table tfoot td { background: var(--navy); color: var(--white); padding: 8px 8px; font-size: 11px; font-weight: 700; text-align: right; position: sticky; bottom: 0; }
+.amort-wrap table tfoot td:first-child { text-align: left; }
+
+/* ── Quote summary ────────────────────────────────────────────────────────── */
+.quote-hero { background: linear-gradient(135deg, var(--navy), var(--blue)); border-radius: 10px; padding: 20px 24px; color: var(--white); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.quote-hero h2 { font-size: 22px; font-weight: 700; }
+.quote-hero p  { font-size: 12px; opacity: .75; margin-top: 3px; }
+.quote-hero .qty-pill { background: rgba(255,255,255,.2); border-radius: 10px; padding: 12px 20px; text-align: center; }
+.quote-hero .qty-pill .n { font-size: 34px; font-weight: 700; line-height: 1; }
+.quote-hero .qty-pill .l { font-size: 11px; opacity: .8; }
+.q-table td { padding: 7px 0; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+.q-table td:last-child { text-align: right; font-weight: 500; color: var(--navy); }
+.q-table td:first-child { color: var(--text-mid); }
+.q-table tr.qt td { font-weight: 700; color: var(--navy); font-size: 14px; border-top: 2px solid var(--navy); }
+.q-note { border-radius: 8px; padding: 12px 16px; font-size: 12px; margin-top: 14px; }
+.q-note.green { background: var(--green-lt); color: var(--green); }
+.q-note.blue  { background: var(--blue-pale); color: var(--navy); }
+
+/* ── Print / export button ────────────────────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; transition: all .15s; }
+.btn-primary { background: var(--navy); color: var(--white); }
+.btn-primary:hover { background: var(--blue); }
+.btn-outline { background: var(--white); color: var(--navy); border: 1.5px solid var(--navy); }
+.btn-outline:hover { background: var(--blue-pale); }
+
+/* ── Residual auto note ───────────────────────────────────────────────────── */
+.resid-note { font-size: 11px; margin-top: 4px; padding: 4px 8px; border-radius: 5px; display: inline-block; }
+.resid-note.active-warn { background: var(--amber-lt); color: var(--amber); }
+.resid-note.active-ok   { background: var(--green-lt);  color: var(--green); }
+
+/* ── Info pill ────────────────────────────────────────────────────────────── */
+.pill { display: inline-block; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
+.pill-blue  { background: var(--blue-pale); color: var(--navy); }
+.pill-navy  { background: var(--navy); color: var(--white); }
+.pill-green { background: var(--green-lt); color: var(--green); }
+
+@media print {
+  body { background: white; padding: 0; }
+  .tabs, .qty-bar, .btn, .header-right .badge { display: none !important; }
+  .panel { display: block !important; }
+  .header { border-radius: 0; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── HEADER ──────────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-left">
+    <h1>MULTINET — Lease Calculator</h1>
+    <p>All-in monthly cost · Service &amp; repairs · GoCardless · Quantity pricing</p>
+  </div>
+  <div class="header-right">
+    <div class="badge">v3.1 · June 2026</div>
+    <div class="qty-badge" id="hdr-qty">1 device</div>
+  </div>
+</div>
+
+<!-- ── TABS ────────────────────────────────────────────────────────────────── -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('calc')">Calculator</div>
+  <div class="tab" onclick="showTab('pool')">Pool Cost</div>
+  <div class="tab" onclick="showTab('amort')">Payment Schedule</div>
+  <div class="tab" onclick="showTab('quote')">Quote Summary</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 1: CALCULATOR                                                         -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="body">
+<div class="panel active" id="tab-calc">
+
+  <!-- Quantity bar -->
+  <div class="qty-bar">
+    <label>Number of devices</label>
+    <input type="range" min="1" max="100" step="1" value="1" id="qty" oninput="calc()">
+    <div class="qty-display">
+      <div class="qty-num" id="qty-disp">1</div>
+      <div class="qty-lbl">devices</div>
+    </div>
+  </div>
+
+  <!-- Summary strip -->
+  <div class="summary">
+    <div class="sc">
+      <div class="sc-label">Per device / month</div>
+      <div class="sc-value" id="s-per">€0.00</div>
+      <div class="sc-sub">lease + service + GC</div>
+    </div>
+    <div class="sc">
+      <div class="sc-label">Lease total (all)</div>
+      <div class="sc-value" id="s-lease">€0.00</div>
+      <div class="sc-sub" id="s-lease-sub">finance + margin</div>
+    </div>
+    <div class="sc">
+      <div class="sc-label">Service fee (all)</div>
+      <div class="sc-value" id="s-svc">€0.00</div>
+      <div class="sc-sub">repairs + risk</div>
+    </div>
+    <div class="sc hl">
+      <div class="sc-label">Total monthly invoice</div>
+      <div class="sc-value" id="s-total">€0.00</div>
+      <div class="sc-sub" id="s-net">Net to Multinet: €0</div>
+    </div>
+    <div class="sc gr">
+      <div class="sc-label">Gross profit (full term)</div>
+      <div class="sc-value" id="s-profit">€0.00</div>
+      <div class="sc-sub" id="s-profit-sub">all devices</div>
+    </div>
+  </div>
+
+  <!-- Inputs + Breakdown -->
+  <div class="two-col">
+    <div>
+      <!-- Lease inputs -->
+      <div class="box">
+        <div class="box-title">Lease inputs (per device)</div>
+        <div class="sr"><div class="sr-top"><label>Computer cost (€)</label><span id="l-cost">€1,200</span></div><input type="range" min="200" max="5000" step="50" value="1200" id="cost" oninput="calc()"></div>
+        <div class="sr">
+          <div class="sr-top"><label>Residual value — ≤36 months (%)</label><span id="l-resid">25%</span></div>
+          <input type="range" min="0" max="50" step="1" value="25" id="resid" oninput="calc()">
+          <div class="resid-note active-ok" id="resid-note">Effective residual: 25% — term ≤ 36 months</div>
+        </div>
+        <div class="sr"><div class="sr-top"><label>Annual interest rate (%)</label><span id="l-rate">8%</span></div><input type="range" min="1" max="25" step="0.5" value="8" id="rate" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Lease term (months)</label><span id="l-term">36</span></div><input type="range" min="12" max="60" step="6" value="36" id="term" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Lease margin (%)</label><span id="l-margin">10%</span></div><input type="range" min="0" max="30" step="1" value="10" id="margin" oninput="calc()"></div>
+      </div>
+
+      <!-- GoCardless -->
+      <div class="box" style="margin-top:14px;">
+        <div class="box-title">GoCardless settings</div>
+        <div class="tg">
+          <div class="tog active" id="gc-std" onclick="setGC('standard')">Standard — 1% + €0.20</div>
+          <div class="tog" id="gc-adv" onclick="setGC('advanced')">Advanced — 1.25% + €0.20</div>
+        </div>
+        <div class="cr">
+          <label for="pass-on">Pass fee to customer?</label>
+          <input type="checkbox" id="pass-on" checked onchange="calc()">
+        </div>
+        <p style="font-size:11px;color:#99a3b8;margin-top:6px;" id="gc-note">Fee added to invoice — one direct debit per monthly bill.</p>
+      </div>
+    </div>
+
+    <div>
+      <!-- Service inputs -->
+      <div class="box">
+        <div class="box-title">Service &amp; risk fee (per device)</div>
+        <div class="sr"><div class="sr-top"><label>Annual repair budget (€)</label><span id="l-repair">€80</span></div><input type="range" min="0" max="300" step="10" value="80" id="repair" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Pool cost per device (€/mo)</label><span id="l-pool">€5.00</span></div><input type="range" min="0" max="20" step="0.5" value="5" id="pool" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Write-off risk (%)</label><span id="l-wo">3%</span></div><input type="range" min="0" max="15" step="0.5" value="3" id="wo" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Accidental damage cover (€/yr)</label><span id="l-dmg">€50</span></div><input type="range" min="0" max="200" step="10" value="50" id="dmg" oninput="calc()"></div>
+        <div class="sr"><div class="sr-top"><label>Service margin (%)</label><span id="l-svcm">15%</span></div><input type="range" min="0" max="40" step="1" value="15" id="svcm" oninput="calc()"></div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="breakdown" style="margin-top:14px;">
+        <div class="bd-title">
+          <span>Monthly breakdown</span>
+          <span style="display:flex;gap:6px;">
+            <span class="pill pill-blue" id="bd-1">1 device</span>
+            <span class="pill pill-navy" id="bd-q">All</span>
+          </span>
+        </div>
+        <table>
+          <tr class="gh"><td colspan="3">Lease</td></tr>
+          <tr><td>Depreciation</td><td id="b-dep-1">—</td><td id="b-dep-q">—</td></tr>
+          <tr><td>Finance cost</td><td id="b-fin-1">—</td><td id="b-fin-q">—</td></tr>
+          <tr><td>Lease margin</td><td id="b-lm-1">—</td><td id="b-lm-q">—</td></tr>
+          <tr class="gh"><td colspan="3">Service &amp; risk</td></tr>
+          <tr><td>Repair reserve</td><td id="b-rep-1">—</td><td id="b-rep-q">—</td></tr>
+          <tr><td>Replacement pool</td><td id="b-pool-1">—</td><td id="b-pool-q">—</td></tr>
+          <tr><td>Write-off provision</td><td id="b-wo-1">—</td><td id="b-wo-q">—</td></tr>
+          <tr><td>Accidental damage</td><td id="b-dmg-1">—</td><td id="b-dmg-q">—</td></tr>
+          <tr><td>Service margin</td><td id="b-svm-1">—</td><td id="b-svm-q">—</td></tr>
+          <tr class="gh"><td colspan="3">Payment processing</td></tr>
+          <tr><td>GoCardless fee</td><td id="b-gc-1">—</td><td id="b-gc-q">—</td></tr>
+          <tr class="tr-total"><td>Total invoice</td><td id="b-tot-1">—</td><td id="b-tot-q">—</td></tr>
+          <tr class="tr-net"><td>Net to Multinet</td><td id="b-net-1">—</td><td id="b-net-q">—</td></tr>
+          <tr class="tr-profit"><td>Gross profit (term)</td><td id="b-gp-1">—</td><td id="b-gp-q">—</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full term footer -->
+  <div class="foot-bar">
+    <div class="fb-item"><div class="fb-label">Devices</div><div class="fb-val" id="t-qty">1</div></div>
+    <div class="fb-item"><div class="fb-label">Total invoiced</div><div class="fb-val" id="t-inv">€0</div></div>
+    <div class="fb-item"><div class="fb-label">Total costs</div><div class="fb-val" id="t-cost">€0</div></div>
+    <div class="fb-item"><div class="fb-label">Residuals recovered</div><div class="fb-val" id="t-resid">€0</div></div>
+    <div class="fb-item"><div class="fb-label">Gross profit</div><div class="fb-val green" id="t-profit">€0</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 2: POOL COST                                                          -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="tab-pool">
+  <div class="two-col">
+    <div>
+      <div class="box">
+        <div class="box-title">Pool setup</div>
+        <div class="sr"><div class="sr-top"><label>Device cost (€)</label><span id="p-cost">€1,200</span></div><input type="range" min="300" max="3000" step="50" value="1200" id="p-cost-in" oninput="poolCalc()"></div>
+        <div class="sr"><div class="sr-top"><label>Spare ratio (1 spare per N leases)</label><span id="p-ratio">1 per 10</span></div><input type="range" min="5" max="30" step="1" value="10" id="p-ratio-in" oninput="poolCalc()"></div>
+        <div class="sr"><div class="sr-top"><label>Spare unit value (% of device)</label><span id="p-sv">100%</span></div><input type="range" min="40" max="100" step="5" value="100" id="p-sv-in" oninput="poolCalc()"></div>
+        <div class="sr"><div class="sr-top"><label>Lease term (months)</label><span id="p-term">36</span></div><input type="range" min="12" max="60" step="6" value="36" id="p-term-in" oninput="poolCalc()"></div>
+        <div class="sr" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-bdr);">
+          <div class="sr-top"><label>Your proposed pool fee (€/mo)</label><span id="p-proposed">€5.00</span></div>
+          <input type="range" min="0" max="20" step="0.5" value="5" id="p-proposed-in" oninput="poolCalc()">
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="pool-calc">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-mid);margin-bottom:12px;">How it's calculated</div>
+        <table>
+          <tr><td>Device cost</td><td id="pm-cost">€1,200</td></tr>
+          <tr><td>÷ spare ratio</td><td id="pm-ratio">÷ 10</td></tr>
+          <tr><td>× spare unit value</td><td id="pm-sv">× 100%</td></tr>
+          <tr><td>= capital per customer</td><td id="pm-cap">€120.00</td></tr>
+          <tr><td>÷ term (months)</td><td id="pm-term">÷ 36</td></tr>
+          <tr class="pc-total"><td>= correct pool fee</td><td id="pm-correct">€3.33/mo</td></tr>
+          <tr><td style="padding-top:8px;color:var(--gray-mid);">Your proposed fee</td><td style="padding-top:8px;" id="pm-prop">€5.00/mo</td></tr>
+          <tr><td style="color:var(--gray-mid);">Difference</td><td id="pm-diff">+€1.67/mo</td></tr>
+          <tr><td style="color:var(--gray-mid);">Over/under recovery</td><td id="pm-pct">+50%</td></tr>
+        </table>
+      </div>
+      <div class="verdict good" id="pool-verdict">
+        <div class="vt" id="pv-title">—</div>
+        <div class="vx" id="pv-text">—</div>
+      </div>
+      <div class="ref-table">
+        <div style="font-size:10px;color:var(--gray-mid);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Quick reference — correct fee by device cost</div>
+        <table id="ref-tbl"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 3: PAYMENT SCHEDULE                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="tab-amort">
+  <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span style="font-size:12px;color:var(--gray-mid);">Month-by-month schedule from Calculator inputs.</span>
+    <span class="pill pill-blue" id="a-sum">—</span>
+    <span class="pill pill-navy" id="a-qty">—</span>
+  </div>
+  <div class="amort-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left;">Month</th>
+          <th>Opening balance</th>
+          <th>Lease payment</th>
+          <th>Finance charge</th>
+          <th>Principal</th>
+          <th>Closing balance</th>
+          <th>Service fee</th>
+          <th>GoCardless</th>
+          <th>Total invoice</th>
+        </tr>
+      </thead>
+      <tbody id="amort-body"></tbody>
+      <tfoot id="amort-foot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB 4: QUOTE SUMMARY                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="tab-quote">
+  <div class="quote-hero">
+    <div>
+      <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Multinet — Lease Quote</div>
+      <h2>Computer Lease Agreement</h2>
+      <p>Prepared June 2026 · Subject to signed Terms &amp; Conditions</p>
+    </div>
+    <div class="qty-pill">
+      <div class="n" id="q-qty-big">1</div>
+      <div class="l">device(s)</div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-bottom:14px;">
+    <div class="box">
+      <div class="box-title">Equipment</div>
+      <table class="q-table" id="q-equip"></table>
+    </div>
+    <div class="box">
+      <div class="box-title">Monthly charges — per device</div>
+      <table class="q-table" id="q-per"></table>
+    </div>
+    <div class="box">
+      <div class="box-title" id="q-all-title">Monthly invoice total</div>
+      <table class="q-table" id="q-all"></table>
+    </div>
+    <div class="box">
+      <div class="box-title">Full-term summary</div>
+      <table class="q-table" id="q-full"></table>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="q-note green" id="q-gc-note">—</div>
+    <div class="q-note blue">
+      <strong>Service coverage includes:</strong> repair reserve, replacement pool (next-business-day swap), write-off provision, accidental damage cover, and Multinet service margin.
+    </div>
+  </div>
+
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;">
+    <button class="btn btn-outline" onclick="window.print()">🖨 Print / Save PDF</button>
+    <button class="btn btn-primary" onclick="exportCSV()">⬇ Export CSV</button>
+  </div>
+</div>
+
+</div><!-- .body -->
+</div><!-- .app -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let gcRate = 0.01;
+const GC_FIXED = 0.20;
+const GC_CAP   = 4.00;
+let S = {}; // computed state
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function fmt(n, dec=2) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  const s = abs.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '(€' : '€') + s + (n < 0 ? ')' : '');
+}
+function pct(n) { return (n*100).toFixed(1) + '%'; }
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.className = 'tab' + (i === ['calc','pool','amort','quote'].indexOf(id) ? ' active' : '');
+  });
+  document.querySelectorAll('.panel').forEach(p => p.className = 'panel');
+  $('tab-'+id).className = 'panel active';
+  if (id === 'amort') buildAmort();
+  if (id === 'quote') buildQuote();
+  if (id === 'pool')  poolCalc();
+}
+
+// ── GoCardless plan ────────────────────────────────────────────────────────
+function setGC(plan) {
+  gcRate = plan === 'advanced' ? 0.0125 : 0.01;
+  $('gc-std').className = 'tog' + (plan==='standard'?' active':'');
+  $('gc-adv').className = 'tog' + (plan==='advanced'?' active':'');
+  calc();
+}
+
+// ── Main calculation ───────────────────────────────────────────────────────
+function calc() {
+  const qty     = +$('qty').value;
+  const cost    = +$('cost').value;
+  const residPct= +$('resid').value / 100;
+  const rate    = +$('rate').value / 100;
+  const term    = +$('term').value;
+  const margin  = +$('margin').value / 100;
+  const repair  = +$('repair').value;
+  const pool    = +$('pool').value;
+  const wo      = +$('wo').value / 100;
+  const dmg     = +$('dmg').value;
+  const svcm    = +$('svcm').value / 100;
+  const passOn  = $('pass-on').checked;
+
+  // Effective residual: 0 if term > 36
+  const effResid = term > 36 ? 0 : residPct;
+
+  // Update labels
+  $('qty-disp').textContent   = qty;
+  $('hdr-qty').textContent    = qty + (qty===1?' device':' devices');
+  $('l-cost').textContent     = fmt(cost, 0);
+  $('l-resid').textContent    = pct(residPct);
+  $('l-rate').textContent     = pct(rate);
+  $('l-term').textContent     = term;
+  $('l-margin').textContent   = pct(margin);
+  $('l-repair').textContent   = fmt(repair, 0);
+  $('l-pool').textContent     = fmt(pool);
+  $('l-wo').textContent       = pct(wo);
+  $('l-dmg').textContent      = fmt(dmg, 0);
+  $('l-svcm').textContent     = pct(svcm);
+
+  // Residual note
+  const rn = $('resid-note');
+  if (term > 36) {
+    rn.className = 'resid-note active-warn';
+    rn.textContent = `⚠ Effective residual: 0% — term > 36 months (auto-applied)`;
+  } else {
+    rn.className = 'resid-note active-ok';
+    rn.textContent = `✓ Effective residual: ${pct(effResid)} — term ≤ 36 months`;
+  }
+
+  // Per-device lease
+  const residVal  = cost * effResid;
+  const mf        = rate / 24;
+  const dep       = (cost - residVal) / term;
+  const fin       = (cost + residVal) * mf;
+  const base      = dep + fin;
+  const lmAmt     = base * margin;
+  const leasePer  = base + lmAmt;
+
+  // Per-device service
+  const repM      = repair / 12;
+  const woM       = cost * wo / term;
+  const dmgM      = dmg / 12;
+  const rawSvc    = repM + pool + woM + dmgM;
+  const svcMar    = rawSvc * svcm;
+  const svcPer    = rawSvc + svcMar;
+
+  // Fleet totals pre-GC
+  const leaseAll  = leasePer * qty;
+  const svcAll    = svcPer   * qty;
+  const preGcAll  = leaseAll + svcAll;
+
+  // GoCardless (one transaction per invoice)
+  let gcFee, invoice, netPayout;
+  if (passOn) {
+    invoice   = Math.min((preGcAll + GC_FIXED) / (1 - gcRate), preGcAll + GC_CAP);
+    gcFee     = Math.min(invoice * gcRate + GC_FIXED, GC_CAP);
+    netPayout = invoice - gcFee;
+  } else {
+    invoice   = preGcAll;
+    gcFee     = Math.min(invoice * gcRate + GC_FIXED, GC_CAP);
+    netPayout = invoice - gcFee;
+  }
+  const gcPer  = gcFee / qty;
+  const invPer = invoice / qty;
+
+  // Full-term
+  const totalReceived = invoice * term + residVal * qty;
+  const totalCosts    = (cost * qty)
+    + (repM * term * qty)
+    + (pool * term * qty)
+    + (woM  * term * qty)
+    + (dmgM * term * qty)
+    + gcFee * term;
+  const grossProfit = totalReceived - totalCosts;
+
+  // Store state
+  S = { qty, cost, residPct, effResid, rate, term, margin, repair, pool, wo, dmg, svcm, passOn,
+        residVal, dep, fin, lmAmt, leasePer, repM, woM, dmgM, rawSvc, svcMar, svcPer,
+        leaseAll, svcAll, preGcAll, gcFee, gcPer, invoice, invPer, netPayout,
+        totalReceived, totalCosts, grossProfit };
+
+  // ── Summary cards ──
+  $('s-per').textContent       = fmt(invPer);
+  $('s-lease').textContent     = fmt(leaseAll);
+  $('s-lease-sub').textContent = `× ${qty} device${qty===1?'':'s'}`;
+  $('s-svc').textContent       = fmt(svcAll);
+  $('s-total').textContent     = fmt(invoice);
+  $('s-net').textContent       = `Net to Multinet: ${fmt(netPayout)}`;
+  $('s-profit').textContent    = fmt(grossProfit);
+  $('s-profit-sub').textContent= `${term}mo · ${qty} device${qty===1?'':'s'}`;
+
+  // ── Breakdown table ──
+  const set = (id1, id2, v1, v2) => {
+    $(id1).textContent = fmt(v1);
+    $(id2).textContent = fmt(v2);
+  };
+  set('b-dep-1','b-dep-q', dep,    dep*qty);
+  set('b-fin-1','b-fin-q', fin,    fin*qty);
+  set('b-lm-1', 'b-lm-q',  lmAmt, lmAmt*qty);
+  set('b-rep-1','b-rep-q', repM,   repM*qty);
+  set('b-pool-1','b-pool-q',pool,  pool*qty);
+  set('b-wo-1', 'b-wo-q',  woM,    woM*qty);
+  set('b-dmg-1','b-dmg-q', dmgM,   dmgM*qty);
+  set('b-svm-1','b-svm-q', svcMar, svcMar*qty);
+  set('b-gc-1', 'b-gc-q',  gcPer,  gcFee);
+  set('b-tot-1','b-tot-q', invPer, invoice);
+  set('b-net-1','b-net-q', netPayout/qty, netPayout);
+  set('b-gp-1', 'b-gp-q',  grossProfit/qty, grossProfit);
+
+  $('bd-1').textContent = '1 device';
+  $('bd-q').textContent = qty + (qty===1?' device':' devices');
+
+  // ── Footer bar ──
+  $('t-qty').textContent    = qty;
+  $('t-inv').textContent    = fmt(invoice * term);
+  $('t-cost').textContent   = fmt(totalCosts);
+  $('t-resid').textContent  = fmt(residVal * qty);
+  $('t-profit').textContent = fmt(grossProfit);
+
+  // ── GC note ──
+  $('gc-note').textContent = passOn
+    ? 'Fee added to invoice — one direct debit per monthly bill.'
+    : 'Fee absorbed by Multinet — reduces net payout.';
+}
+
+// ── Payment schedule ────────────────────────────────────────────────────────
+function buildAmort() {
+  const { cost, residVal, rate, term, dep, lmAmt, svcPer, gcFee, invoice, qty } = S;
+  const monthRate = rate / 12;
+  let balance = (cost - residVal) * qty;
+  let totLease=0, totSvc=0, totGc=0, totInv=0;
+  let rows = '';
+  for (let m = 1; m <= term; m++) {
+    const finCharge = balance * monthRate;
+    const principal = dep * qty - finCharge;
+    const closing   = Math.max(0, balance - principal);
+    const lPay      = (dep + lmAmt) * qty;
+    totLease += lPay; totSvc += svcPer*qty; totGc += gcFee; totInv += invoice;
+    const bg = m%2===0 ? 'background:var(--gray);' : '';
+    rows += `<tr style="${bg}">
+      <td>${m}</td>
+      <td>${fmt(balance)}</td>
+      <td>${fmt(lPay)}</td>
+      <td>${fmt(finCharge)}</td>
+      <td>${fmt(principal)}</td>
+      <td>${fmt(closing)}</td>
+      <td>${fmt(svcPer*qty)}</td>
+      <td>${fmt(gcFee)}</td>
+      <td>${fmt(invoice)}</td>
+    </tr>`;
+    balance = closing;
+  }
+  $('amort-body').innerHTML = rows;
+  $('amort-foot').innerHTML = `<tr>
+    <td>TOTALS</td><td></td>
+    <td>${fmt(totLease)}</td><td></td><td></td><td></td>
+    <td>${fmt(totSvc)}</td>
+    <td>${fmt(totGc)}</td>
+    <td>${fmt(totInv)}</td>
+  </tr>`;
+  $('a-sum').textContent = `${term} payments of ${fmt(invoice)}`;
+  $('a-qty').textContent = `${qty} device${qty===1?'':'s'} · Residual: ${fmt(residVal*qty)}`;
+}
+
+// ── Quote summary ────────────────────────────────────────────────────────────
+function buildQuote() {
+  const s = S;
+  function qrow(label, value, total) {
+    return `<tr class="${total?'qt':''}"><td>${label}</td><td>${value}</td></tr>`;
+  }
+  $('q-qty-big').textContent = s.qty;
+  $('q-all-title').textContent = `Monthly invoice — ${s.qty} device${s.qty===1?'':'s'}`;
+
+  $('q-equip').innerHTML =
+    qrow('Device cost (each)', fmt(s.cost)) +
+    qrow('Quantity', s.qty + ' device' + (s.qty===1?'':'s')) +
+    qrow('Total device value', fmt(s.cost * s.qty)) +
+    qrow('Residual value (each)', fmt(s.residVal) + ` (${pct(s.effResid)})`) +
+    (s.term > 36 ? qrow('Residual note', '0% — term > 36 months') : '') +
+    qrow('Lease term', s.term + ' months') +
+    qrow('Annual interest rate', pct(s.rate));
+
+  $('q-per').innerHTML =
+    qrow('Base lease', fmt(s.leasePer)) +
+    qrow('Service &amp; risk fee', fmt(s.svcPer)) +
+    qrow('GoCardless (share)', fmt(s.gcPer)) +
+    qrow('Per device / month', fmt(s.invPer), true);
+
+  $('q-all').innerHTML =
+    qrow('Base lease (' + s.qty + ' devices)', fmt(s.leaseAll)) +
+    qrow('Service fee (' + s.qty + ' devices)', fmt(s.svcAll)) +
+    qrow('GoCardless fee (1 transaction)', fmt(s.gcFee)) +
+    qrow('Total monthly invoice', fmt(s.invoice), true);
+
+  $('q-full').innerHTML =
+    qrow('Total invoiced (' + s.term + 'mo)', fmt(s.invoice * s.term)) +
+    qrow('Residuals recovered', fmt(s.residVal * s.qty)) +
+    qrow('Total received', fmt(s.totalReceived)) +
+    qrow('Total costs', fmt(s.totalCosts)) +
+    qrow('Gross profit', fmt(s.grossProfit), true);
+
+  $('q-gc-note').innerHTML = '<strong>Payment via GoCardless Direct Debit.</strong> ' +
+    (s.passOn
+      ? `GoCardless collects one direct debit of ${fmt(s.invoice)}/month. Processing fee included in the invoice total.`
+      : `GoCardless collects ${fmt(s.invoice)}/month. Processing fee of ${fmt(s.gcFee)} absorbed by Multinet.`);
+}
+
+// ── Pool cost checker ────────────────────────────────────────────────────────
+function poolCalc() {
+  const cost    = +$('p-cost-in').value;
+  const ratio   = +$('p-ratio-in').value;
+  const sv      = +$('p-sv-in').value / 100;
+  const term    = +$('p-term-in').value;
+  const proposed= +$('p-proposed-in').value;
+
+  $('p-cost').textContent    = fmt(cost, 0);
+  $('p-ratio').textContent   = '1 per ' + ratio;
+  $('p-sv').textContent      = (sv*100) + '%';
+  $('p-term').textContent    = term;
+  $('p-proposed').textContent= fmt(proposed);
+
+  const cap     = (cost / ratio) * sv;
+  const correct = cap / term;
+  const diff    = proposed - correct;
+  const pcnt    = correct > 0 ? (diff / correct) * 100 : 0;
+
+  $('pm-cost').textContent    = fmt(cost);
+  $('pm-ratio').textContent   = '÷ ' + ratio;
+  $('pm-sv').textContent      = '× ' + (sv*100) + '%';
+  $('pm-cap').textContent     = fmt(cap);
+  $('pm-term').textContent    = '÷ ' + term;
+  $('pm-correct').textContent = fmt(correct) + '/mo';
+  $('pm-prop').textContent    = fmt(proposed) + '/mo';
+  $('pm-diff').textContent    = (diff>=0?'+':'') + fmt(diff) + '/mo';
+  $('pm-diff').style.color    = diff>=0 ? 'var(--green)' : 'var(--red)';
+  $('pm-pct').textContent     = (pcnt>=0?'+':'') + pcnt.toFixed(0) + '%';
+
+  const vd = $('pool-verdict');
+  const vt = $('pv-title');
+  const vx = $('pv-text');
+
+  if (Math.abs(pcnt) <= 15) {
+    vd.className='verdict good'; vt.textContent='✓ Spot on — this is about right';
+    vx.textContent='Your fee closely matches the capital cost of the replacement pool. Fair and defensible.';
+  } else if (diff>0 && pcnt<=50) {
+    vd.className='verdict good'; vt.textContent='✓ Reasonable — slight over-recovery';
+    vx.textContent=`${pcnt.toFixed(0)}% above bare capital cost — covers spare depreciation, admin and demand spikes. Fully justifiable.`;
+  } else if (diff>0 && pcnt>50) {
+    vd.className='verdict ok'; vt.textContent='⚠ High — review your inputs';
+    vx.textContent=`${pcnt.toFixed(0)}% above capital cost. Check whether your spare ratio and unit value match your actual setup.`;
+  } else {
+    vd.className='verdict bad'; vt.textContent='✗ Under-recovery — you will lose money';
+    vx.textContent=`${Math.abs(pcnt).toFixed(0)}% below the pool's capital cost. Increase the fee, widen your spare ratio, or use cheaper refurb spares.`;
+  }
+
+  // Reference table
+  const costs = [500,800,1200,1500,2000,2500];
+  const ratios = [10,15,20];
+  let th = '<tr><td style="color:var(--gray-mid);font-weight:600;">Device</td>';
+  ratios.forEach(r => th += `<td style="color:var(--gray-mid);font-weight:600;text-align:right;">1:${r}</td>`);
+  th += '</tr>';
+  let rws = '';
+  costs.forEach(c => {
+    rws += `<tr><td style="font-weight:600;color:var(--navy);">€${c}</td>`;
+    ratios.forEach(r => { rws += `<td style="color:var(--text-mid);">${fmt((c/r*sv)/term)}</td>`; });
+    rws += '</tr>';
+  });
+  $('ref-tbl').innerHTML = th + rws;
+}
+
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const s = S;
+  const rows = [
+    ['Multinet Lease Calculator Export', '', ''],
+    ['Generated', new Date().toLocaleDateString('en-GB'), ''],
+    ['','',''],
+    ['INPUTS','',''],
+    ['Quantity', s.qty, ''],
+    ['Device cost', s.cost, '€'],
+    ['Residual value (input %)', s.residPct*100, '%'],
+    ['Effective residual %', s.effResid*100, '%'],
+    ['Annual interest rate', s.rate*100, '%'],
+    ['Lease term', s.term, 'months'],
+    ['Lease margin', s.margin*100, '%'],
+    ['Annual repair budget', s.repair, '€'],
+    ['Pool cost per device/mo', s.pool, '€'],
+    ['Write-off risk', s.wo*100, '%'],
+    ['Accidental damage cover', s.dmg, '€/yr'],
+    ['Service margin', s.svcm*100, '%'],
+    ['GoCardless rate', gcRate*100, '%'],
+    ['Pass GC to customer', s.passOn?'Yes':'No', ''],
+    ['','',''],
+    ['MONTHLY BREAKDOWN — PER DEVICE','',''],
+    ['Depreciation', s.dep.toFixed(2), '€'],
+    ['Finance cost', s.fin.toFixed(2), '€'],
+    ['Lease margin', s.lmAmt.toFixed(2), '€'],
+    ['Repair reserve', s.repM.toFixed(2), '€'],
+    ['Replacement pool', s.pool.toFixed(2), '€'],
+    ['Write-off provision', s.woM.toFixed(2), '€'],
+    ['Accidental damage', s.dmgM.toFixed(2), '€'],
+    ['Service margin', s.svcMar.toFixed(2), '€'],
+    ['GoCardless (share)', s.gcPer.toFixed(2), '€'],
+    ['Total per device/month', s.invPer.toFixed(2), '€'],
+    ['','',''],
+    ['MONTHLY — ALL DEVICES','',''],
+    ['Lease total', s.leaseAll.toFixed(2), '€'],
+    ['Service total', s.svcAll.toFixed(2), '€'],
+    ['GoCardless fee', s.gcFee.toFixed(2), '€'],
+    ['Monthly invoice', s.invoice.toFixed(2), '€'],
+    ['Net to Multinet', s.netPayout.toFixed(2), '€'],
+    ['','',''],
+    ['FULL TERM','',''],
+    ['Total invoiced', (s.invoice*s.term).toFixed(2), '€'],
+    ['Residuals recovered', (s.residVal*s.qty).toFixed(2), '€'],
+    ['Total received', s.totalReceived.toFixed(2), '€'],
+    ['Total costs', s.totalCosts.toFixed(2), '€'],
+    ['Gross profit', s.grossProfit.toFixed(2), '€'],
+  ];
+
+  // Amortisation
+  rows.push(['','','']);
+  rows.push(['PAYMENT SCHEDULE','Opening Balance','Lease Payment','Finance Charge','Principal','Closing Balance','Service Fee','GoCardless','Total Invoice']);
+  const { cost, residVal, rate, term, dep, lmAmt, svcPer, gcFee, invoice, qty } = s;
+  const mr = rate / 12;
+  let bal = (cost - residVal) * qty;
+  for (let m = 1; m <= term; m++) {
+    const fin = bal * mr;
+    const pri = dep*qty - fin;
+    const cl  = Math.max(0, bal - pri);
+    rows.push([m, bal.toFixed(2), ((dep+lmAmt)*qty).toFixed(2), fin.toFixed(2), pri.toFixed(2), cl.toFixed(2), (svcPer*qty).toFixed(2), gcFee.toFixed(2), invoice.toFixed(2)]);
+    bal = cl;
+  }
+
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Multinet_Lease_Quote.csv';
+  a.click();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+calc();
+poolCalc();
+</script>
+</body>
+</html>
